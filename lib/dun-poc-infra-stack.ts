@@ -4,6 +4,7 @@ import * as cdk from '@aws-cdk/core';
 import * as s3 from '@aws-cdk/aws-s3';
 import * as iam from '@aws-cdk/aws-iam';
 import * as tf from '@aws-cdk/aws-transfer';
+import * as eventsources from '@aws-cdk/aws-lambda-event-sources';
 
 export class DunPocInfraStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -138,5 +139,27 @@ export class DunPocInfraStack extends cdk.Stack {
         value: 'test',
       }],
     });
+
+    const processLargeFile = new lambda.Function(this, 'ProcessLargeFileHandler', {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      code: lambda.Code.fromAsset('lambda'), 
+      handler: 'processfile.handler',
+      timeout: cdk.Duration.seconds(900),
+      memorySize: 3000
+      // environment: {
+      //   BUCKET_NAME: bucket.bucketName
+      // }              
+    });
+
+    processLargeFile.role?.attachInlinePolicy(
+      new iam.Policy(this, 'processFile-policy', {
+      statements: [uploadLambdaPolicy],
+    }),);
+
+    processLargeFile.addEventSource(new eventsources.S3EventSource(bucket, {
+      events:  [s3.EventType.OBJECT_CREATED],
+      filters: [{ prefix: 'raw/', suffix: '.txt' }]
+    }));
+
   }
 }
